@@ -179,7 +179,7 @@ SPECFORGE_BASE_URL=https://api.example.com SPECFORGE_TOKEN=... \
   python3 -m pytest -q out/contract_tests
 ```
 
-Live smoke evidence (requires a key; not run in this environment):
+Live smoke evidence (key configured; run on 2026-10-20):
 
 ```bash
 export NEBIUS_API_KEY=...

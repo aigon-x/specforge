@@ -168,7 +168,7 @@ env -u NEBIUS_API_KEY /usr/bin/python3 scripts/live_smoke.py --out out/live_smok
 ```
 
 ```
-error: NEBIUS_API_KEY is not set; live smoke test not run
+error: NEBIUS_API_KEY is not set (earlier run before the key existed)
 exit=2
 ```
 
