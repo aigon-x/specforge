@@ -13,10 +13,10 @@ the output.
 - `verify` — structural audit of an OpenAPI 3.1 document: version, schemas, local `$ref`,
   path parameters, operation ids, response descriptions, security contradictions and
   (with `--brief`) requirement coverage by method/path/status.
-- `tests/` — 61 own tests, including negative cases (invalid brief, no key in live mode,
-  broken references, missing 401, uncovered requirements, truncated completion); within
-  them all 45 generated shop contract tests and all 20 library contract tests execute
-  against a local `http.server` stub.
+- `tests/` — 63 own tests, including negative cases (invalid brief, no key in live mode,
+  broken references, missing 401, uncovered requirements, truncated completion, unwritable
+  output directory); within them all 45 generated shop contract tests and all 20 library
+  contract tests execute against a local `http.server` stub.
 
 No production server is bundled. A loopback stub (`specforge/stub.py`) serves the
 generated contract tests; the same tests run against any implementation that matches

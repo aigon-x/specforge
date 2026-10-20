@@ -328,6 +328,23 @@ $ NEBIUS_API_KEY= /usr/bin/python3 -m pytest -q -p no:warnings
 61 passed in 3.58s
 ```
 
+Re-run after the output-directory guard (2026-10-20, web forge writes into a private
+`tmp_path`, and a storage fault is reported as 500 with a fixable message):
+
+```
+$ NEBIUS_API_KEY= /usr/bin/python3 -m pytest -q -p no:warnings
+63 passed in 3.32s
+```
+
+Measured before the guard, with `out/shop` owned by `aigon` and mode `2755`: forge could
+not unlink the old files, `shutil.rmtree(..., ignore_errors=True)` hid that, and the API
+answered **422** with the raw CLI line `error: [Errno 13] Permission denied:
+.../openapi.yaml` — i.e. a storage fault looked like a bad brief. Now `_prepare_target`
+(`web/server.py:81-107`) reports **500** with `output directory … cannot be cleared
+(Permission denied); fix its permissions or set SPECFORGE_WEB_OUT to a writable path`,
+and stale results are removed rather than merged. Ablation: restoring
+`rmtree(ignore_errors=True)` turns `test_unwritable_output_is_a_server_error_with_a_fixable_message` red.
+
 `finish_reason: "length"` now fails as `NebiusError(kind="truncated")` on the first attempt
 (`specforge/nebius.py:220-229`) instead of reaching the JSON parser and being reported as
 "completion is not JSON"; a retry is skipped because the same `max_tokens` would cut again.

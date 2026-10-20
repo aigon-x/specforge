@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
+import web.server as server
 from web.server import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_out(tmp_path, monkeypatch):
+    """Forge into a private directory: a shared out/ owned by another user must not score us."""
+    monkeypatch.setattr(server, "OUT_DIR", tmp_path)
+    return tmp_path
 
 
 def test_index_returns_the_interface():
@@ -49,6 +58,33 @@ def test_unknown_brief_is_not_found():
 def test_missing_brief_is_not_found():
     response = client.post("/api/forge", json={"brief": "does-not-exist"})
     assert response.status_code == 404
+
+
+def test_unwritable_output_is_a_server_error_with_a_fixable_message(isolated_out):
+    target = isolated_out / "shop"
+    target.mkdir()
+    (target / "stale.txt").write_text("old run", encoding="utf-8")
+    target.chmod(0o555)
+    try:
+        response = client.post("/api/forge", json={"brief": "shop"})
+    finally:
+        target.chmod(0o755)
+    assert response.status_code == 500, "a storage fault is not a bad brief (422)"
+    detail = response.json()["detail"]
+    assert "cannot be cleared" in detail or "not writable" in detail
+    assert "SPECFORGE_WEB_OUT" in detail
+    assert "Traceback" not in detail
+
+
+def test_stale_output_is_replaced_not_merged(isolated_out):
+    target = isolated_out / "shop"
+    target.mkdir()
+    (target / "forge_report.json").write_text('{"stale": true}', encoding="utf-8")
+    response = client.post("/api/forge", json={"brief": "shop"})
+    assert response.status_code == 200
+    assert response.json()["coverage"]["percent"] == 100.0
+    assert not (target / "stale.txt").exists()
+    assert '"stale": true' not in (target / "forge_report.json").read_text(encoding="utf-8")
 
 
 def test_index_is_navigable_from_the_keyboard():

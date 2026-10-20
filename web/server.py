@@ -78,10 +78,37 @@ def _payload(brief_path: Path, report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _prepare_target(target: Path) -> None:
+    """Clear the target so a stale report can never answer for a failed run."""
+    if target.exists():
+        try:
+            shutil.rmtree(target)
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"output directory {target} cannot be cleared ({exc.strerror}); "
+                    "fix its permissions or set SPECFORGE_WEB_OUT to a writable path"
+                ),
+            ) from exc
+    try:
+        target.mkdir(parents=True)
+        probe = target / ".write-probe"
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"output directory {target} is not writable ({exc.strerror}); "
+                "fix its permissions or set SPECFORGE_WEB_OUT to a writable path"
+            ),
+        ) from exc
+
+
 def _run_forge(brief_path: Path) -> dict[str, Any]:
     target = OUT_DIR / brief_path.stem
-    shutil.rmtree(target, ignore_errors=True)
-    target.mkdir(parents=True, exist_ok=True)
+    _prepare_target(target)
     stdout, stderr = io.StringIO(), io.StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr):
         code = forge_main(
