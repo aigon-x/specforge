@@ -208,10 +208,20 @@ class NebiusClient:
     def _parse(self, body: str, attempts: int, started: float) -> Completion:
         try:
             data = json.loads(body)
-            content = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            content = choice["message"]["content"]
         except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
             raise NebiusError(f"invalid completion payload: {exc}", kind="invalid_response",
                               attempts=attempts) from exc
+        if isinstance(choice, dict) and choice.get("finish_reason") == "length":
+            # A truncated reply must not reach the JSON parser: it would surface as
+            # "not JSON" and hide the real cause (max_tokens too small).
+            raise NebiusError(
+                f"completion stopped at max_tokens after {len(content or '')} characters; "
+                "raise max_tokens or shorten the brief",
+                kind="truncated",
+                attempts=attempts,
+            )
         if not isinstance(content, str) or not content.strip():
             raise NebiusError("model returned empty content", kind="invalid_response",
                               attempts=attempts)

@@ -321,6 +321,21 @@ $ NEBIUS_API_KEY= /usr/bin/python3 -m pytest -q -p no:warnings
 58 passed in 3.59s
 ```
 
+Re-run after the truncation guard (2026-10-20):
+
+```
+$ NEBIUS_API_KEY= /usr/bin/python3 -m pytest -q -p no:warnings
+61 passed in 3.58s
+```
+
+`finish_reason: "length"` now fails as `NebiusError(kind="truncated")` on the first attempt
+(`specforge/nebius.py:220-229`) instead of reaching the JSON parser and being reported as
+"completion is not JSON"; a retry is skipped because the same `max_tokens` would cut again.
+The empty-content branch in `specforge/enrich.py:54-58` raised `NameError` (missing import)
+and is now a catchable `NebiusError(kind="empty_content")`, so `forge` degrades with a
+warning instead of a traceback. Ablation: disabling the guard turns
+`test_truncated_completion_reports_truncation_and_is_not_retried` red.
+
 ## Live Nebius Token Factory (2026-10-20)
 - Endpoint: `https://api.tokenfactory.nebius.com/v1/chat/completions`
 - Model: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (z katalogu `/v1/models`, zgodność LAW-CATALOG-1)

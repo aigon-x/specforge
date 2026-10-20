@@ -119,6 +119,34 @@ def test_invalid_completion_payload_is_rejected():
     assert excinfo.value.kind == "invalid_response"
 
 
+def _completion_body(content, finish_reason):
+    return json.dumps(
+        {"choices": [{"message": {"content": content}, "finish_reason": finish_reason}]}
+    )
+
+
+def test_truncated_completion_reports_truncation_and_is_not_retried():
+    transport = FakeTransport([200], body=_completion_body('{"operations":', "length"))
+    client = NebiusClient(api_key="test-key", transport=transport, backoff=0.0, max_retries=2)
+    with pytest.raises(NebiusError) as excinfo:
+        client.complete([])
+    assert excinfo.value.kind == "truncated"
+    # Retrying with the same max_tokens would burn paid tokens on the same cut.
+    assert len(transport.calls) == 1
+
+
+def test_finished_completion_still_parses():
+    transport = FakeTransport([200], body=_completion_body('{"operations": {}}', "stop"))
+    client = NebiusClient(api_key="test-key", transport=transport, backoff=0.0)
+    assert client.complete([]).content == '{"operations": {}}'
+
+
+def test_empty_completion_is_a_nebius_error():
+    with pytest.raises(NebiusError) as excinfo:
+        parse_payload("   ")
+    assert excinfo.value.kind == "empty_content"
+
+
 class TimeoutTransport:
     def __init__(self, failures):
         self.failures = failures

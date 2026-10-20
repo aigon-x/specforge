@@ -52,9 +52,10 @@ def build_messages(brief: Brief, spec: dict[str, Any]) -> list[dict[str, str]]:
 
 def parse_payload(content: str) -> dict[str, Any]:
     if not isinstance(content, str) or not content.strip():
-        raise SpecForgeError(
+        raise NebiusError(
             "model returned no content (reasoning-only or truncated response); "
-            "increase max_tokens or disable reasoning"
+            "increase max_tokens or disable reasoning",
+            kind="empty_content",
         )
     text = content.strip()
     if text.startswith("```"):
