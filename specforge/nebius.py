@@ -14,9 +14,9 @@ from typing import Any, Callable
 from .errors import FixtureError, NebiusConfigError, NebiusError
 from .fixtures import build_enrichment_fixture
 
-DEFAULT_BASE_URL = "https://api.studio.nebius.ai/v1"
+DEFAULT_BASE_URL = "https://api.tokenfactory.nebius.com/v1"
 # NVIDIA Nemotron is served by Nebius Token Factory; NEBIUS_MODEL may override it.
-DEFAULT_MODEL = "nvidia/Llama-3.1-Nemotron-70B-Instruct"
+DEFAULT_MODEL = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 
 Transport = Callable[[dict[str, Any]], tuple[int, dict[str, str], str]]
 

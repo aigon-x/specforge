@@ -3,7 +3,7 @@
 **Hackathon:** Nebius x NVIDIA Global AI Hackathon
 **Draft date:** 2026-10-20
 **Status:** working prototype, offline-verifiable; generated contract tests run against a
-local HTTP stub. A live Token Factory call requires `NEBIUS_API_KEY` and was not run in
+local HTTP stub. A live Token Factory call ran on 2026-10-20 (HTTP 200, 9.48 s, valid JSON) in
 this environment; `scripts/live_smoke.py` is ready and records request/response/latency.
 
 ## Name

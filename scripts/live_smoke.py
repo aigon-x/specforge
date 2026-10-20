@@ -43,7 +43,8 @@ def _build_payload(brief_path: str, model: str) -> tuple[dict[str, Any], dict[st
         "model": model,
         "messages": messages,
         "temperature": 0.0,
-        "max_tokens": 1500,
+        "max_tokens": 4096,
+        "response_format": {"type": "json_object"},
     }
     summary = {
         "brief": str(brief_path),

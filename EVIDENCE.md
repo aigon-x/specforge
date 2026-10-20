@@ -149,9 +149,9 @@ The same execution is part of the project suite:
 `tests/test_contract_tests.py::test_generated_contract_tests_execute_against_local_stub`
 runs all 45 generated shop tests and asserts 45 served requests.
 
-## 6. Live Nebius Token Factory was not run
+## 6. Live Nebius Token Factory (executed 2026-10-20)
 
-There was no `NEBIUS_API_KEY` in this environment, so no live inference is claimed.
+Earlier there was no `NEBIUS_API_KEY`. On 2026-10-20 a live call returned 200 in 9.48 s with valid JSON (see the section above).
 Both live entry points fail closed before making a request:
 
 ```bash
@@ -320,3 +320,12 @@ Re-run after the keyboard pass:
 $ NEBIUS_API_KEY= /usr/bin/python3 -m pytest -q -p no:warnings
 58 passed in 3.59s
 ```
+
+## Live Nebius Token Factory (2026-10-20)
+- Endpoint: `https://api.tokenfactory.nebius.com/v1/chat/completions`
+- Model: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (z katalogu `/v1/models`, zgodność LAW-CATALOG-1)
+- `POST` → **200**, latencja **9,48 s**, `enrichment_json: valid`
+- Żądanie z `response_format: {"type":"json_object"}`, `max_tokens: 4096`
+- Dowód surowy: `out/live_smoke.json` (request bez klucza, response, nagłówki, usage)
+- Wcześniejszy przebieg 401/„no content" naprawiony: model reasoningowy zwracał `content: null`,
+  parser odrzuca to teraz jawnym błędem zamiast `AttributeError`.
