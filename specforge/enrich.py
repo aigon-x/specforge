@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
@@ -70,6 +71,11 @@ def parse_payload(content: str) -> dict[str, Any]:
     if ambiguities is not None and not isinstance(ambiguities, list):
         raise NebiusError("ambiguities must be a list", kind="invalid_json")
     return payload
+
+
+def idempotency_key(brief: dict, model: str) -> str:
+    """Same brief + model must not burn a second paid inference."""
+    return hashlib.sha256((json.dumps(brief, sort_keys=True) + model).encode("utf-8")).hexdigest()
 
 
 def apply_enrichment(
