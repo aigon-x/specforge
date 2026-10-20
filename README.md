@@ -21,7 +21,7 @@ matches the spec.
 ## Quickstart
 
 ```bash
-cd project
+cd specforge
 python3 -m specforge forge --brief briefs/shop.yaml --out out/ --offline
 python3 -m specforge verify out/openapi.yaml --brief briefs/shop.yaml
 python3 -m pytest tests -q
