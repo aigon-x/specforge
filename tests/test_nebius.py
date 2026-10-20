@@ -71,7 +71,7 @@ def test_live_mode_without_key_is_a_config_error(monkeypatch):
 def test_default_model_is_nemotron_and_env_overrides(monkeypatch):
     monkeypatch.delenv("NEBIUS_MODEL", raising=False)
     assert NebiusClient.from_env(mode="offline").model == (
-        "nvidia/Llama-3.1-Nemotron-70B-Instruct"
+        "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
     )
     monkeypatch.setenv("NEBIUS_MODEL", "nvidia/Some-Other-Nemotron")
     assert NebiusClient.from_env(mode="offline").model == "nvidia/Some-Other-Nemotron"
