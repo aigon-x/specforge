@@ -124,7 +124,7 @@ inference is remote and optional.
 
 ## Links
 
-- Repository: `<REPO_URL_PLACEHOLDER>`
+- Repository: `https://github.com/aigon-x/specforge`
 - Demo video: `<VIDEO_URL_PLACEHOLDER>`
 - Architecture: `ARCHITECTURE.md`
 - Evidence: `EVIDENCE.md`
