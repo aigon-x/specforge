@@ -1,0 +1,11 @@
+name: Incomplete API
+version: 0.1.0
+resources:
+  - name: Thing
+    path: /things
+    operations: [list]
+    fields:
+      id:
+        type: string
+        read_only: true
+requirements: []

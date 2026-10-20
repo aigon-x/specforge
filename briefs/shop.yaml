@@ -1,0 +1,156 @@
+name: Shop API
+slug: shop
+version: 1.0.0
+description: >
+  Kontrakt dla sklepu: produkty, zamówienia i klienci. Brief opisuje zasoby,
+  dozwolone operacje, wymagane pola oraz identyfikatory wymagań, które kontrakt
+  musi pokryć ścieżkami i kodami odpowiedzi.
+base_url: https://api.shop.example/v1
+auth:
+  type: bearer
+
+resources:
+  - name: Product
+    path: /products
+    id_field: id
+    operations: [list, create, get, update, delete]
+    search: [name, tags]
+    extra_errors: [409]
+    fields:
+      id:
+        type: string
+        format: uuid
+        read_only: true
+      name:
+        type: string
+        required: true
+        min_length: 1
+        max_length: 120
+      description:
+        type: string
+        max_length: 2000
+      price_cents:
+        type: integer
+        required: true
+        minimum: 0
+      currency:
+        type: string
+        enum: [PLN, EUR, USD]
+      tags:
+        type: array
+        items:
+          type: string
+      active:
+        type: boolean
+
+  - name: Order
+    path: /orders
+    id_field: id
+    operations: [list, create, get, update, delete]
+    search: [status, customer_id]
+    fields:
+      id:
+        type: string
+        format: uuid
+        read_only: true
+      customer_id:
+        type: string
+        format: uuid
+        required: true
+      status:
+        type: string
+        required: true
+        enum: [new, paid, shipped, cancelled]
+      total_cents:
+        type: integer
+        required: true
+        minimum: 0
+      created_at:
+        type: string
+        format: date-time
+        read_only: true
+
+  - name: Customer
+    path: /customers
+    id_field: id
+    operations: [list, create, get, update, delete]
+    search: [email]
+    extra_errors: [409]
+    fields:
+      id:
+        type: string
+        format: uuid
+        read_only: true
+      email:
+        type: string
+        format: email
+        required: true
+        max_length: 254
+      name:
+        type: string
+        required: true
+        min_length: 1
+        max_length: 160
+      marketing_opt_in:
+        type: boolean
+      created_at:
+        type: string
+        format: date-time
+        read_only: true
+
+requirements:
+  - id: R1
+    text: Klient może wylistować produkty z paginacją i filtrami.
+    method: GET
+    path: /products
+    status: 200
+  - id: R2
+    text: Klient może utworzyć produkt i otrzymuje go z nadanym id.
+    method: POST
+    path: /products
+    status: 201
+  - id: R3
+    text: Klient może pobrać pojedynczy produkt.
+    method: GET
+    path: /products/{id}
+    status: 200
+  - id: R4
+    text: Klient może częściowo zaktualizować produkt.
+    method: PATCH
+    path: /products/{id}
+    status: 200
+  - id: R5
+    text: Klient może usunąć produkt; odpowiedź bez treści.
+    method: DELETE
+    path: /products/{id}
+    status: 204
+  - id: R6
+    text: Klient może wylistować zamówienia i filtrować po statusie.
+    method: GET
+    path: /orders
+    status: 200
+  - id: R7
+    text: Klient może złożyć zamówienie.
+    method: POST
+    path: /orders
+    status: 201
+  - id: R8
+    text: Klient może pobrać pojedyncze zamówienie.
+    method: GET
+    path: /orders/{id}
+    status: 200
+  - id: R9
+    text: Niepoprawne zamówienie kończy się błędem walidacji 422.
+    method: POST
+    path: /orders
+    status: 422
+  - id: R10
+    text: Klient może wylistować klientów sklepu.
+    method: GET
+    path: /customers
+    status: 200
+  - id: R11
+    text: Klient może dodać klienta sklepu; duplikat e-maila to konflikt.
+    method: POST
+    path: /customers
+    status: 201
