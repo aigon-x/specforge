@@ -256,3 +256,45 @@ deterministic, except that the report embeds no timestamps or random values.
 Test runs used pytest temporary directories, which pytest removes automatically. The stub
 uses an ephemeral loopback port and is shut down after each run. `__pycache__` directories
 are interpreter bytecode caches and contain no project state.
+
+## 12. Web UI
+
+A thin FastAPI layer serves the browser interface and runs the same offline forge pipeline
+in-process. It writes artifacts to `out/web/<brief>/` (gitignored) and reads no API key.
+
+Start it:
+
+```bash
+NEBIUS_API_KEY= /usr/bin/python3 -m uvicorn web.server:app --host 127.0.0.1 --port 8099
+```
+
+Endpoints:
+
+| Method | Path | Behaviour |
+|---|---|---|
+| GET | `/` | `web/index.html` |
+| GET | `/api/briefs` | brief names found in `briefs/` |
+| GET | `/api/health` | `status`, `version`, brief count, output directory |
+| POST | `/api/forge` | body `{"brief": "<name>"}`; offline forge; returns `paths`, `operations`, `schemas`, `coverage`, `errors`, `warnings`, `ambiguities`, `report`, `yaml` |
+
+UI behaviour: dark theme (`#05070a` / `#12161c`, accent `#4c82d9`), brief selector,
+"Forge contract" button, stat cards (paths, operations, schemas, coverage), requirement
+coverage progress bar with `role="progressbar"`, error and ambiguity lists, raw OpenAPI
+YAML inside `<details>`, empty/loading/error states, `aria-live="polite"` status line,
+inline SVG favicon, responsive grid and `prefers-reduced-motion` support.
+
+Measured with the expanded suite:
+
+```bash
+NEBIUS_API_KEY= /usr/bin/python3 -m pytest -q -p no:warnings
+```
+
+```
+57 passed, 65 skipped in 3.49s
+```
+
+The six new tests in `tests/test_web.py` cover the index page, the brief list (`shop`
+present), health, a shop forge with `coverage.percent == 100.0` and no errors, a path
+traversal brief (`../shop`) returning 404, and an unknown brief returning 404. The 65
+skipped cases are the generated contract tests, which execute in dedicated stub runs
+(sections 5 and 9).

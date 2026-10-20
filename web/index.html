@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>SpecForge — brief to OpenAPI 3.1</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2305070a'/%3E%3Cpath d='M8 22V10h7.5a4.5 4.5 0 0 1 0 9H12' stroke='%234c82d9' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='22.5' cy='21.5' r='2.2' fill='%234c82d9'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #05070a; --panel: #12161c; --panel-2: #171c24; --line: #232b36;
+    --text: #e9ecf0; --muted: #8b96a5; --accent: #4c82d9; --accent-soft: #4c82d933;
+    --ok: #5de1a4; --err: #e0566a; --warn: #f0b429;
+    --radius: 12px; --motion: 180ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh; background:
+      radial-gradient(900px 500px at 20% -10%, #0d1522 0%, transparent 70%),
+      radial-gradient(700px 400px at 110% 10%, #0a111c 0%, transparent 65%), var(--bg);
+    color: var(--text);
+    font: 15px/1.55 Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .shell { max-width: 1080px; margin: 0 auto; padding: 40px 20px 64px; }
+  header.top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  .mark { color: var(--accent); font-size: 22px; line-height: 1; }
+  h1 { font-size: clamp(22px, 4vw, 30px); margin: 0; letter-spacing: -0.02em; font-weight: 650; }
+  .tag { color: var(--muted); font-size: 13px; }
+  .lede { color: var(--muted); margin: 8px 0 28px; max-width: 62ch; }
+  code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .panel {
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 22px;
+  }
+  .controls { display: flex; gap: 14px; align-items: end; flex-wrap: wrap; }
+  .field { display: grid; gap: 7px; flex: 1 1 260px; }
+  label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+  select, button {
+    font: inherit; color: var(--text); border-radius: 9px; border: 1px solid var(--line);
+    background: #0c1016; min-height: 42px;
+  }
+  select { padding: 0 12px; width: 100%; }
+  select:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  button {
+    padding: 0 20px; cursor: pointer; font-weight: 600; border-color: transparent;
+    background: var(--accent); color: #06101f; transition: filter var(--motion), transform var(--motion);
+    white-space: nowrap;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.08); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: 0.55; cursor: progress; }
+  .status { min-height: 20px; margin: 14px 2px 0; color: var(--muted); font-size: 13px; }
+  .status[data-kind="error"] { color: var(--err); }
+  .status[data-kind="ok"] { color: var(--ok); }
+  .spinner {
+    display: inline-block; width: 12px; height: 12px; margin-right: 8px; vertical-align: -1px;
+    border: 2px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #results { margin-top: 26px; display: grid; gap: 16px; }
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+  .card .num { font-size: 30px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .card .cap { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .card.accent { border-color: #2c4a78; box-shadow: inset 0 0 0 1px #4c82d91f; }
+  .card.accent .num { color: var(--accent); }
+  .meter { display: grid; gap: 8px; }
+  .meter .row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); }
+  .track { height: 10px; border-radius: 99px; background: #0a0e14; overflow: hidden; border: 1px solid var(--line); }
+  .fill { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #3968b4, var(--accent)); transition: width 420ms ease; }
+  .block h2 { font-size: 14px; margin: 0 0 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+  ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+  ul.plain li::marker { color: var(--accent); }
+  .finding { display: grid; gap: 2px; }
+  .finding .where { color: var(--muted); font-size: 12px; }
+  .empty { color: var(--muted); font-size: 14px; }
+  .empty.bad { color: var(--err); }
+  details { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0; }
+  summary { cursor: pointer; padding: 14px 18px; color: var(--muted); font-size: 13px; }
+  details pre { margin: 0; padding: 0 18px 18px; overflow: auto; max-height: 420px; font-size: 12.5px; color: #c9d3e0; }
+  footer { margin-top: 34px; color: #5d6774; font-size: 12px; }
+  [hidden] { display: none !important; }
+  @media (max-width: 560px) {
+    .shell { padding: 26px 14px 48px; }
+    .panel { padding: 16px; }
+    button { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <span class="mark" aria-hidden="true">&#9670;</span>
+    <h1>SpecForge</h1>
+    <span class="tag">brief &rarr; OpenAPI 3.1</span>
+  </header>
+  <p class="lede">Pick a product brief. Forge runs offline on deterministic fixtures, then reports the
+    generated contract, requirement coverage and every validation finding.</p>
+
+  <section class="panel" aria-labelledby="forge-label">
+    <form id="forge-form" class="controls" novalidate>
+      <div class="field">
+        <label id="forge-label" for="brief">Product brief</label>
+        <select id="brief" name="brief" required disabled>
+          <option value="">Loading briefs&hellip;</option>
+        </select>
+      </div>
+      <button id="run" type="submit" disabled>Forge contract</button>
+    </form>
+    <p id="status" class="status" role="status" aria-live="polite" aria-atomic="true">Loading briefs&hellip;</p>
+  </section>
+
+  <section id="results" aria-live="polite" aria-label="Forge result" hidden>
+    <div class="cards">
+      <div class="card"><div class="num" id="stat-paths">&ndash;</div><div class="cap">Paths</div></div>
+      <div class="card"><div class="num" id="stat-ops">&ndash;</div><div class="cap">Operations</div></div>
+      <div class="card"><div class="num" id="stat-schemas">&ndash;</div><div class="cap">Schemas</div></div>
+      <div class="card accent"><div class="num" id="stat-cov">&ndash;</div><div class="cap">Coverage</div></div>
+    </div>
+    <div class="panel meter">
+      <div class="row"><span>Requirement coverage</span><span id="cov-label">&ndash;</span></div>
+      <div class="track" id="cov-bar" role="progressbar" aria-label="Requirement coverage"
+           aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="fill" id="cov-fill"></div>
+      </div>
+    </div>
+    <div class="panel block">
+      <h2>Errors</h2>
+      <div id="errors"></div>
+    </div>
+    <div class="panel block">
+      <h2>Ambiguities</h2>
+      <div id="ambiguities"></div>
+    </div>
+    <details>
+      <summary>Raw OpenAPI YAML</summary>
+      <pre><code id="yaml"></code></pre>
+    </details>
+  </section>
+
+  <footer>Offline mode &middot; no API key is read &middot; artifacts land in
+    <code>out/web/&lt;brief&gt;/</code></footer>
+</div>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const form = $("forge-form");
+  const select = $("brief");
+  const run = $("run");
+  const statusEl = $("status");
+  const results = $("results");
+  const els = {
+    paths: $("stat-paths"), ops: $("stat-ops"), schemas: $("stat-schemas"),
+    cov: $("stat-cov"), covLabel: $("cov-label"), covBar: $("cov-bar"),
+    covFill: $("cov-fill"), errors: $("errors"), ambiguities: $("ambiguities"),
+    yaml: $("yaml"),
+  };
+
+  function setStatus(text, kind = "") {
+    statusEl.textContent = text;
+    statusEl.dataset.kind = kind;
+  }
+
+  function setBusy(busy, label = "") {
+    select.disabled = busy;
+    run.disabled = busy || !select.value;
+    statusEl.dataset.kind = "";
+    if (!busy) {
+      statusEl.removeAttribute("aria-busy");
+      return;
+    }
+    const spin = document.createElement("span");
+    spin.className = "spinner";
+    spin.setAttribute("aria-hidden", "true");
+    statusEl.replaceChildren(spin, document.createTextNode(label));
+    statusEl.setAttribute("aria-busy", "true");
+  }
+
+  function renderFindings(container, items, emptyText) {
+    container.replaceChildren();
+    if (!items || !items.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = emptyText;
+      container.append(p);
+      return;
+    }
+    const list = document.createElement("ul");
+    list.className = "plain";
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      if (typeof item === "string") {
+        li.textContent = item;
+      } else {
+        const wrap = document.createElement("div");
+        wrap.className = "finding";
+        const msg = document.createElement("span");
+        msg.textContent = item.message || item.code || "finding";
+        const where = document.createElement("span");
+        where.className = "where";
+        where.textContent = [item.code, item.location].filter(Boolean).join(" \u00b7 ");
+        wrap.append(msg, where);
+        li.append(wrap);
+      }
+      list.append(li);
+    });
+    container.append(list);
+  }
+
+  function render(data) {
+    const cov = data.coverage || {};
+    const pct = typeof cov.percent === "number"
+      ? cov.percent
+      : Math.round((cov.ratio || 0) * 1000) / 10;
+    const bounded = Math.max(0, Math.min(100, pct));
+    els.paths.textContent = data.paths ?? "0";
+    els.ops.textContent = data.operations ?? "0";
+    els.schemas.textContent = data.schemas ?? "0";
+    els.cov.textContent = `${pct}%`;
+    els.covLabel.textContent = `${cov.covered ?? 0}/${cov.total ?? 0} requirements`;
+    els.covFill.style.width = `${bounded}%`;
+    els.covBar.setAttribute("aria-valuenow", String(bounded));
+    els.covBar.setAttribute("aria-valuetext", `${pct}% of requirements covered`);
+    renderFindings(els.errors, data.errors, "No validation errors.");
+    renderFindings(els.ambiguities, data.ambiguities, "No ambiguities reported.");
+    els.yaml.textContent = data.yaml || "# no spec generated";
+    results.hidden = false;
+  }
+
+  async function loadBriefs() {
+    try {
+      const response = await fetch("/api/briefs", { headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const names = data.briefs || [];
+      select.replaceChildren();
+      if (!names.length) {
+        select.append(new Option("No briefs found", ""));
+        run.disabled = true;
+        setStatus("No briefs in briefs/. Add a YAML brief first.", "error");
+        return;
+      }
+      names.forEach((name) => select.append(new Option(name, name)));
+      select.disabled = false;
+      run.disabled = false;
+      setStatus(`${names.length} brief${names.length === 1 ? "" : "s"} available. Pick one and forge.`);
+    } catch (error) {
+      select.replaceChildren(new Option("Unavailable", ""));
+      run.disabled = true;
+      setStatus(`Could not load briefs: ${error.message}`, "error");
+    }
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const brief = select.value;
+    if (!brief) return;
+    results.hidden = true;
+    setBusy(true, `Forging ${brief}\u2026`);
+    try {
+      const response = await fetch("/api/forge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ brief }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+      render(data);
+      const failures = (data.errors || []).length;
+      if (failures) {
+        setStatus(`${brief}: contract generated with ${failures} validation error${failures === 1 ? "" : "s"}.`, "error");
+      } else {
+        setStatus(`${brief}: ${data.operations} operations, ${data.coverage?.percent ?? 0}% coverage, no errors.`, "ok");
+      }
+    } catch (error) {
+      results.hidden = true;
+      setStatus(`Forge failed: ${error.message}`, "error");
+    } finally {
+      select.disabled = false;
+      run.disabled = !select.value;
+      statusEl.removeAttribute("aria-busy");
+    }
+  });
+
+  loadBriefs();
+})();
+</script>
+</body>
