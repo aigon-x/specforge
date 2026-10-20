@@ -2,7 +2,9 @@
 
 **Hackathon:** Nebius x NVIDIA Global AI Hackathon
 **Draft date:** 2026-10-20
-**Status:** working prototype, offline-verifiable; live Token Factory call requires a key.
+**Status:** working prototype, offline-verifiable; generated contract tests run against a
+local HTTP stub. A live Token Factory call requires `NEBIUS_API_KEY` and was not run in
+this environment; `scripts/live_smoke.py` is ready and records request/response/latency.
 
 ## Name
 
@@ -12,8 +14,8 @@ SpecForge
 
 SpecForge turns a product brief into an OpenAPI 3.1 contract, audits the contract for
 broken references, security contradictions and requirement coverage, and generates pytest
-contract tests — deterministically, with a Nebius Token Factory model used only where
-prose helps.
+contract tests — deterministically, with an NVIDIA Nemotron model on Nebius Token Factory
+used only where prose helps.
 
 ## Inspiration
 
@@ -41,13 +43,19 @@ optional, replaceable edge.
    coverage by method, path and status.
 3. **Nebius Token Factory enrichment.** An OpenAI-compatible client (env
    `NEBIUS_API_KEY`, configurable base URL/model, timeout, retries with `Retry-After`)
-   proposes better summaries/descriptions and lists ambiguities. Output is parsed as JSON
-   and applied only to prose fields; unknown operation ids are ignored and reported.
-4. **Offline mode.** Without a key, or with `--offline`, deterministic fixtures drive the
-   same pipeline. The CLI banner and the JSON report both state `OFFLINE`.
+   proposes better summaries/descriptions and lists ambiguities. The default model is
+   `nvidia/Llama-3.1-Nemotron-70B-Instruct`; `NEBIUS_MODEL` overrides it with any model
+   available in Token Factory. Output is parsed as JSON and applied only to prose fields;
+   unknown operation ids are ignored and reported.
+4. **Offline mode.** Without a key, or with `--offline`, enrichment is generated
+   deterministically from the operations and requirements in the brief itself. The CLI
+   banner and the JSON report both state `OFFLINE`.
 5. **Contract tests.** Emits pytest files from the spec: happy path plus 401/404/422 cases
-   where declared, with sample payloads derived from schemas. Tests skip cleanly until
-   `SPECFORGE_BASE_URL` is set.
+   where declared, with sample payloads derived from schemas. The bundled
+   `specforge/stub.py` runs `http.server` in a thread and maps `operationId` -> case ->
+   declared status/body, so all generated tests issue real HTTP requests and assert
+   statuses without external network. Without `SPECFORGE_BASE_URL` the generated file
+   still skips cleanly in CI.
 6. **Report.** `forge_report.json` records mode, model label, enrichment results,
    ambiguities, validation findings, coverage and artefact hashes.
 
@@ -76,21 +84,33 @@ optional, replaceable edge.
 - **Useful validation without a full JSON Schema engine.** Implementing the subset that
   catches real failures took more care than wrapping a library, especially around path
   templates, `$ref` integrity and security/401 consistency.
-- **Offline reproducibility.** Fixtures had to be deterministic and clearly labelled, not
-  passed off as model output. Operation-id naming had to be stable so fixtures can target
-  operations by id.
+- **Offline reproducibility without a sample-specific fixture.** The offline payload is
+  derived from the prompt: every operation of any brief gets prose, and a second brief
+  (library API) is covered without editing a fixture. It is deterministic and clearly
+  labelled, not passed off as model output.
+- **Proving contract tests are runnable.** A loopback `http.server` stub keyed by
+  `operationId` and case name turns 45 skipped tests into 45 executed requests with
+  asserted statuses; the second brief adds 20 more.
+- **Live evidence without a key.** `scripts/live_smoke.py` exercises the same enrichment
+  request, redacts the bearer token, and records request, response and latency. It refuses
+  to run without `NEBIUS_API_KEY`.
 - **Failure behaviour.** A missing key, exhausted retries and malformed completions each
   needed a distinct, testable outcome instead of a generic exception.
 
 ## Accomplishments
 
-- 6 paths / 15 operations / 13 schemas generated from an 11-requirement brief, with 100%
-  requirement coverage and zero validation errors.
-- 46 own tests passing, including negative tests for invalid brief, undefined security
+- 6 paths / 15 operations / 13 schemas generated from an 11-requirement shop brief, and
+  4 paths / 7 operations / 9 schemas from a second, independent 7-requirement library
+  brief; both at 100% requirement coverage and zero validation errors.
+- 51 own tests passing, including negative tests for invalid brief, undefined security
   scheme, missing `$ref`, missing 401, uncovered requirements, retry exhaustion and live
   mode without a key.
-- 45 generated contract tests that import, compile and skip deterministically in CI.
-- One-command offline demo: `forge` and `verify`, no network, no secrets.
+- 45 generated shop contract tests and 20 library contract tests actually executed against
+  the local stub (45 and 20 HTTP requests served), not skipped.
+- One-command offline demo: `forge`, `verify` and `run_contract_stub.py`, no external
+  network, no secrets.
+- Live smoke test ready: `scripts/live_smoke.py` records the redacted request, raw response
+  and latency; it wrote nothing here because no key was available.
 
 ## What we learned
 
@@ -105,8 +125,8 @@ optional, replaceable edge.
 
 ## What's next
 
-- Replace the fixture with recorded Token Factory responses (sanitised) and add a live smoke
-  test gated by CI secrets.
+- Run `scripts/live_smoke.py` with a real key and publish the sanitised evidence; gate it
+  in CI with secrets.
 - Expand validation: `webhooks`, `callbacks`, OAuth flow internals, JSON Schema format
   checks, and semantic diffing between two spec versions.
 - Generate schemathesis-style property tests and negative payloads from the same plan.
@@ -117,6 +137,7 @@ optional, replaceable edge.
 
 - Python 3.12, PyYAML, pytest, `urllib.request`
 - Nebius Token Factory (OpenAI-compatible chat completions)
+- NVIDIA Nemotron (`nvidia/Llama-3.1-Nemotron-70B-Instruct`) as the default model
 - OpenAPI 3.1, JSON Schema 2020-12, RFC 9457 problem details
 
 No framework, database or container is required. The code runs on CPU; Token Factory
@@ -145,6 +166,12 @@ export NEBIUS_API_KEY=...
 python3 -m specforge forge --brief briefs/shop.yaml --out out/ --live
 ```
 
+Contract tests against the bundled local stub (no external network):
+
+```bash
+python3 scripts/run_contract_stub.py --spec out/openapi.yaml --tests out/contract_tests
+```
+
 Contract tests against a running service:
 
 ```bash
@@ -152,9 +179,19 @@ SPECFORGE_BASE_URL=https://api.example.com SPECFORGE_TOKEN=... \
   python3 -m pytest -q out/contract_tests
 ```
 
+Live smoke evidence (requires a key; not run in this environment):
+
+```bash
+export NEBIUS_API_KEY=...
+python3 scripts/live_smoke.py --out out/live_smoke.json
+```
+
 ## Notes for judges
 
 The development environment had no Nebius API key, so live inference was not exercised.
 The client, retry policy, timeout handling, JSON parsing and offline fallback are covered by
-tests; offline mode is deliberately loud and deterministic. Every number in `EVIDENCE.md`
-was produced by the commands shown there on 2026-10-20.
+tests; offline mode is deliberately loud and deterministic. Generated contract tests were
+not left skipped: all 45 shop tests and all 20 library tests ran against the local stub and
+asserted real statuses. `scripts/live_smoke.py` is the ready live evidence path and writes
+request/response/latency once a key is supplied. Every number in `EVIDENCE.md` was produced
+by the commands shown there on 2026-10-20.

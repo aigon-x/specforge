@@ -1,0 +1,93 @@
+name: Library API
+slug: library
+version: 2.0.0
+description: >
+  Drugi, niezależny brief użyty w testach: katalog biblioteki z książkami
+  i autorami. Różni się liczbą zasobów, operacji, schemą uwierzytelniania
+  i identyfikatorami wymagań od briefu sklepu.
+base_url: https://api.library.example/v2
+auth:
+  type: api_key
+  header: X-Library-Key
+
+resources:
+  - name: Book
+    path: /books
+    id_field: id
+    operations: [list, create, get, update]
+    search: [title]
+    fields:
+      id:
+        type: string
+        format: uuid
+        read_only: true
+      title:
+        type: string
+        required: true
+        min_length: 1
+        max_length: 200
+      isbn:
+        type: string
+        max_length: 20
+      available:
+        type: boolean
+      tags:
+        type: array
+        items:
+          type: string
+
+  - name: Author
+    path: /authors
+    id_field: id
+    operations: [list, create, get]
+    search: [name]
+    fields:
+      id:
+        type: string
+        format: uuid
+        read_only: true
+      name:
+        type: string
+        required: true
+        min_length: 1
+        max_length: 160
+      bio:
+        type: string
+        max_length: 2000
+
+requirements:
+  - id: L1
+    text: Klient może wylistować książki i filtrować po tytule.
+    method: GET
+    path: /books
+    status: 200
+  - id: L2
+    text: Klient może dodać książkę.
+    method: POST
+    path: /books
+    status: 201
+  - id: L3
+    text: Klient może pobrać pojedynczą książkę.
+    method: GET
+    path: /books/{id}
+    status: 200
+  - id: L4
+    text: Klient może zaktualizować książkę.
+    method: PATCH
+    path: /books/{id}
+    status: 200
+  - id: L5
+    text: Klient może wylistować autorów.
+    method: GET
+    path: /authors
+    status: 200
+  - id: L6
+    text: Klient może dodać autora.
+    method: POST
+    path: /authors
+    status: 201
+  - id: L7
+    text: Klient może pobrać pojedynczego autora.
+    method: GET
+    path: /authors/{id}
+    status: 200

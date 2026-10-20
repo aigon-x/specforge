@@ -4,12 +4,12 @@ Deadline: **2026-10-30**
 
 | Pozycja | Status | Dowód / uwaga |
 |---|---|---|
-| Kod i testy | DONE | 46 passed in 0.71s |
+| Kod i testy | DONE | 51 passed; 45+20 contract tests run against local stub |
 | Demo end-to-end | DONE | EVIDENCE.md |
 | Opis zgłoszenia | DONE | DEVPOST_DRAFT.md |
 | Licencja MIT w repo | DONE | LICENSE |
 | Architektura | DONE | ARCHITECTURE.md |
-| Tech sponsora | DONE (offline) | Nebius Token Factory (klient OpenAI-compatible) |
+| Tech sponsora | DONE (offline) | Nebius Token Factory + NVIDIA Nemotron default; live smoke ready, not run (no key) |
 | Repo publiczne | BLOKADA: zgoda Suwerena | wymaga publikacji |
 | Demo publiczne (URL) | BLOKADA: zgoda Suwerena | wymaga wdrożenia |
 | Wideo (<3 min) | BRAK | do nagrania po decyzji Suwerena |

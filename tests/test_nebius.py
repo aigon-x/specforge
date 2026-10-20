@@ -3,7 +3,12 @@ import json
 import pytest
 
 from specforge import NebiusConfigError, NebiusError, parse_brief, validate_spec
-from specforge.enrich import apply_enrichment, parse_payload
+from specforge.enrich import (
+    apply_enrichment,
+    build_messages,
+    enrich_spec,
+    parse_payload,
+)
 from specforge.errors import FixtureError
 from specforge.generator import generate_spec
 from specforge.nebius import NebiusClient, _TransportError
@@ -39,9 +44,11 @@ def test_offline_mode_is_deterministic_and_never_calls_transport():
     def forbidden(payload):
         raise AssertionError("transport must not be used in offline mode")
 
+    brief = parse_brief(minimal_brief())
+    messages = build_messages(brief, generate_spec(brief))
     client = NebiusClient(offline=True, transport=forbidden)
-    first = client.complete([{"role": "user", "content": "hi"}], task="enrich")
-    second = client.complete([{"role": "user", "content": "hi"}], task="enrich")
+    first = client.complete(messages, task="enrich")
+    second = client.complete(messages, task="enrich")
     assert first.content == second.content
     assert first.mode == "offline"
     assert first.attempts == 0
@@ -59,6 +66,15 @@ def test_live_mode_without_key_is_a_config_error(monkeypatch):
     monkeypatch.delenv("NEBIUS_API_KEY", raising=False)
     with pytest.raises(NebiusConfigError):
         NebiusClient.from_env(mode="live")
+
+
+def test_default_model_is_nemotron_and_env_overrides(monkeypatch):
+    monkeypatch.delenv("NEBIUS_MODEL", raising=False)
+    assert NebiusClient.from_env(mode="offline").model == (
+        "nvidia/Llama-3.1-Nemotron-70B-Instruct"
+    )
+    monkeypatch.setenv("NEBIUS_MODEL", "nvidia/Some-Other-Nemotron")
+    assert NebiusClient.from_env(mode="offline").model == "nvidia/Some-Other-Nemotron"
 
 
 def test_auto_mode_falls_back_to_offline_without_key(monkeypatch):
@@ -161,6 +177,43 @@ def test_enrichment_cannot_change_contract_semantics():
     assert _semantics(spec) == paths_before
     assert spec["paths"]["/items"]["get"]["description"] == "Better prose. Covers: R1."
     assert validate_spec(spec).errors == []
+
+
+def _spec_operation_ids(spec):
+    ids = set()
+    for item in spec.get("paths", {}).values():
+        for operation in item.values():
+            if isinstance(operation, dict) and "operationId" in operation:
+                ids.add(operation["operationId"])
+    return ids
+
+
+def test_offline_fixture_is_derived_from_the_shop_brief(shop_brief):
+    spec = generate_spec(shop_brief)
+    client = NebiusClient(offline=True)
+    completion = client.complete(build_messages(shop_brief, spec), task="enrich")
+    payload = json.loads(completion.content)
+    assert set(payload["operations"]) == _spec_operation_ids(spec)
+    assert len(payload["operations"]) == 15
+    ambiguities = json.dumps(payload["ambiguities"])
+    assert "price_cents" not in ambiguities
+    assert "Order" not in ambiguities
+
+
+def test_offline_fixture_covers_a_different_brief(library_brief, shop_brief):
+    spec = generate_spec(library_brief)
+    client = NebiusClient(offline=True)
+    messages = build_messages(library_brief, spec)
+    payload = json.loads(client.complete(messages, task="enrich").content)
+    expected = _spec_operation_ids(spec)
+    declared = sum(len(resource.operations) for resource in library_brief.resources)
+    assert set(payload["operations"]) == expected
+    assert len(payload["operations"]) == len(expected) == declared == 7
+    assert set(payload["operations"]) != _spec_operation_ids(generate_spec(shop_brief))
+    meta = enrich_spec(spec, library_brief, client)
+    assert sorted(meta["applied_operations"]) == sorted(expected)
+    assert meta["ignored_operations"] == []
+    assert validate_spec(spec, library_brief).coverage["ratio"] == 1.0
 
 
 def _semantics(spec):

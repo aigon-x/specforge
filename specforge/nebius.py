@@ -9,14 +9,14 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Callable
 
 from .errors import FixtureError, NebiusConfigError, NebiusError
+from .fixtures import build_enrichment_fixture
 
 DEFAULT_BASE_URL = "https://api.studio.nebius.ai/v1"
-DEFAULT_MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct"
-FIXTURE_PATH = Path(__file__).with_name("fixtures") / "nebius_fixture.json"
+# NVIDIA Nemotron is served by Nebius Token Factory; NEBIUS_MODEL may override it.
+DEFAULT_MODEL = "nvidia/Llama-3.1-Nemotron-70B-Instruct"
 
 Transport = Callable[[dict[str, Any]], tuple[int, dict[str, str], str]]
 
@@ -74,7 +74,6 @@ class NebiusClient:
         max_retries: int = 2,
         backoff: float = 1.0,
         offline: bool = False,
-        fixture_path: str | Path | None = None,
         transport: Transport | None = None,
     ) -> None:
         self.api_key = api_key or ""
@@ -84,8 +83,6 @@ class NebiusClient:
         self.max_retries = max(0, int(max_retries))
         self.backoff = max(0.0, float(backoff))
         self.offline = offline
-        self.fixture_path = Path(fixture_path) if fixture_path else FIXTURE_PATH
-        self._fixtures: dict[str, Any] | None = None
         self._transport = transport or _default_transport(
             f"{self.base_url}/chat/completions", self.api_key, self.timeout
         )
@@ -100,7 +97,6 @@ class NebiusClient:
         max_retries: int = 2,
         backoff: float = 1.0,
         transport: Transport | None = None,
-        fixture_path: str | Path | None = None,
     ) -> "NebiusClient":
         if mode not in ("auto", "live", "offline"):
             raise NebiusError(f"unknown mode {mode!r}", kind="config")
@@ -124,12 +120,11 @@ class NebiusClient:
         return cls(
             api_key=key,
             base_url=os.environ.get("NEBIUS_API_BASE", DEFAULT_BASE_URL),
-            model=os.environ.get("NEBIUS_MODEL", DEFAULT_MODEL),
+            model=os.environ.get("NEBIUS_MODEL") or DEFAULT_MODEL,
             timeout=timeout,
             max_retries=max_retries,
             backoff=backoff,
             offline=offline,
-            fixture_path=fixture_path,
             transport=transport,
         )
 
@@ -152,7 +147,7 @@ class NebiusClient:
         max_tokens: int = 1500,
     ) -> Completion:
         if self.offline:
-            return self._offline(task)
+            return self._offline(task, messages)
         payload = {
             "model": self.model,
             "messages": messages,
@@ -161,24 +156,12 @@ class NebiusClient:
         }
         return self._live(payload)
 
-    def _load_fixtures(self) -> dict[str, Any]:
-        if self._fixtures is not None:
-            return self._fixtures
-        try:
-            self._fixtures = json.loads(self.fixture_path.read_text(encoding="utf-8"))
-        except OSError as exc:
-            raise FixtureError(f"cannot read fixture {self.fixture_path}: {exc}",
-                               kind="fixture") from exc
-        except json.JSONDecodeError as exc:
-            raise FixtureError(f"fixture is not valid JSON: {exc}", kind="fixture") from exc
-        return self._fixtures
-
-    def _offline(self, task: str) -> Completion:
-        fixtures = self._load_fixtures()
-        tasks = fixtures.get("tasks", {})
-        if task not in tasks:
+    def _offline(self, task: str, messages: list[dict[str, str]]) -> Completion:
+        if task != "enrich":
             raise FixtureError(f"fixture has no task {task!r}", kind="fixture")
-        content = json.dumps(tasks[task], sort_keys=True, ensure_ascii=False)
+        content = json.dumps(
+            build_enrichment_fixture(messages), sort_keys=True, ensure_ascii=False
+        )
         return Completion(
             content=content,
             model=f"fixture:{self.model}",

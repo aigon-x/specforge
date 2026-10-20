@@ -4,7 +4,8 @@ SpecForge turns a short product brief (YAML) into an OpenAPI 3.1 contract, audit
 contract with its own validator, and emits runnable pytest contract tests. An optional
 LLM step (Nebius Token Factory, OpenAI-compatible) improves summaries, descriptions and
 flags ambiguities; it can never add endpoints, fields or status codes. Without an API key
-the whole pipeline runs on deterministic fixtures and says so in the output.
+the whole pipeline runs on a deterministic fixture derived from the brief and says so in
+the output.
 
 ## What it does
 
@@ -12,22 +13,32 @@ the whole pipeline runs on deterministic fixtures and says so in the output.
 - `verify` — structural audit of an OpenAPI 3.1 document: version, schemas, local `$ref`,
   path parameters, operation ids, response descriptions, security contradictions and
   (with `--brief`) requirement coverage by method/path/status.
-- `tests/` — 46 own tests, including negative cases (invalid brief, no key in live mode,
-  broken references, missing 401, uncovered requirements).
+- `tests/` — 51 own tests, including negative cases (invalid brief, no key in live mode,
+  broken references, missing 401, uncovered requirements); within them all 45 generated
+  shop contract tests and all 20 library contract tests execute against a local
+  `http.server` stub.
 
-No server is bundled. Generated contract tests run against any implementation that
-matches the spec.
+No production server is bundled. A loopback stub (`specforge/stub.py`) serves the
+generated contract tests; the same tests run against any implementation that matches
+the spec.
 
 ## Quickstart
 
 ```bash
-cd specforge
+cd /path/to/project
 python3 -m specforge forge --brief briefs/shop.yaml --out out/ --offline
+python3 -m specforge forge --brief briefs/library.yaml --out out/library/ --offline
 python3 -m specforge verify out/openapi.yaml --brief briefs/shop.yaml
 python3 -m pytest tests -q
 ```
 
-Generated contract tests (skipped until a base URL is provided):
+Generated contract tests execute against the bundled local stub (no external network):
+
+```bash
+python3 scripts/run_contract_stub.py --spec out/openapi.yaml --tests out/contract_tests
+```
+
+Against a real service:
 
 ```bash
 SPECFORGE_BASE_URL=https://api.example.com SPECFORGE_TOKEN=... \
@@ -42,7 +53,17 @@ python3 -m specforge forge --brief briefs/shop.yaml --out out/ --live
 ```
 
 `--auto` (default when neither flag is given) uses live mode when `NEBIUS_API_KEY` is set
-and fixtures otherwise. Every run prints `mode: OFFLINE ...` or `mode: LIVE ...`.
+and a fixture derived from the brief otherwise. Every run prints `mode: OFFLINE ...` or
+`mode: LIVE ...`.
+
+Live smoke test (one real Token Factory call, records request/response/latency):
+
+```bash
+export NEBIUS_API_KEY=...
+python3 scripts/live_smoke.py --out out/live_smoke.json
+```
+
+Without `NEBIUS_API_KEY` the script exits `2` before any request and writes nothing.
 
 ## CLI
 
@@ -58,8 +79,9 @@ brief, unreadable input or live mode without a key.
 
 Environment: `NEBIUS_API_KEY`, `NEBIUS_API_BASE` (default
 `https://api.studio.nebius.ai/v1`), `NEBIUS_MODEL` (default
-`meta-llama/Meta-Llama-3.1-8B-Instruct`), `NEBIUS_TIMEOUT`, `SPECFORGE_BASE_URL`,
-`SPECFORGE_TOKEN`, `SPECFORGE_TIMEOUT`.
+`nvidia/Llama-3.1-Nemotron-70B-Instruct`), `NEBIUS_TIMEOUT`, `SPECFORGE_BASE_URL`,
+`SPECFORGE_TOKEN`, `SPECFORGE_TIMEOUT`. `NEBIUS_MODEL` overrides the default and may
+name any model available in Nebius Token Factory.
 
 ## Brief format
 
@@ -112,8 +134,14 @@ the run; warnings fail only with `--strict`.
 
 For the sample shop brief SpecForge emits 45 tests: a happy path per operation, plus 401,
 404 and 422 cases where the spec declares them. Each test asserts the expected status and
-the top-level required fields/types of the JSON response. Without `SPECFORGE_BASE_URL`
-every test is skipped with an explicit reason, so the suite is safe in CI.
+the top-level required fields/types of the JSON response. Requests carry
+`X-SpecForge-Operation` and `X-SpecForge-Case` correlation headers.
+
+`specforge/stub.py` runs `http.server.ThreadingHTTPServer` in a background thread and maps
+`operationId` -> case -> declared status/body. `scripts/run_contract_stub.py` starts it and
+runs the generated pytest file, so all 45 shop tests and all 20 library tests really issue
+HTTP requests and assert statuses without external network. Without `SPECFORGE_BASE_URL`
+the generated file still skips with an explicit reason, so it remains safe in CI.
 
 ## Limitations
 
@@ -122,8 +150,13 @@ every test is skipped with an explicit reason, so the suite is safe in CI.
   semantics, `webhooks`, `callbacks`, links or OAuth flow internals.
 - `$ref` support is local-only by design; external references are reported as errors.
 - LLM enrichment is prose-only. Model output cannot alter paths, schemas, parameters or
-  status codes; unknown operation ids are ignored and reported. Live mode was not exercised
-  here (no API key); the shipped deterministic fixture is not a model output.
+  status codes; unknown operation ids are ignored and reported.
+- Live Nebius inference requires `NEBIUS_API_KEY` and was not exercised in this
+  environment (no key). `scripts/live_smoke.py` is ready and records the redacted request,
+  raw response and latency; it exits `2` before any request when the key is missing.
+- Offline enrichment is generated from the operations and requirements in the brief, so it
+  covers every operation of any brief; it is deterministic and is not model output.
+- The local stub validates status codes and shallow response shape, not business semantics.
 - Contract tests assert status and shallow JSON shape, not business semantics.
 - Brief input is YAML via PyYAML; a missing PyYAML is a hard error rather than a silent
   fallback.

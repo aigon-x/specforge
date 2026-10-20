@@ -12,7 +12,7 @@
  [generator.py] + [schemas.py]  deterministic OpenAPI 3.1 document
      |                         paths, components, error model, security
      |<---- [nebius.py] + [enrich.py]  optional prose enrichment
-     |        offline fixtures or Token Factory (OpenAI-compatible)
+     |        brief-derived fixture or Token Factory (OpenAI-compatible)
      v
  [validator.py] + [structure.py] + [refs.py]
      |        structure / schemas / $ref / parameters / operations
@@ -35,9 +35,11 @@
 | `specforge/refs.py` | Local JSON Pointer resolution (`~0`, `~1`, percent decoding) and reference sweep. |
 | `specforge/structure.py` | Document envelope and recursive schema checks. |
 | `specforge/validator.py` | Parameters, operations, responses, security, coverage; `ValidationReport` with stable finding codes. |
-| `specforge/nebius.py` | HTTP client: env config, timeout, retry with `Retry-After`, injectable transport, offline fixture provider. |
+| `specforge/nebius.py` | HTTP client: env config, timeout, retry with `Retry-After`, injectable transport, offline provider (default model `nvidia/Llama-3.1-Nemotron-70B-Instruct`, overridable with `NEBIUS_MODEL`). |
+| `specforge/fixtures.py` | Deterministic enrichment payload computed from the operations and requirements in the prompt; no static fixture tied to one brief. |
 | `specforge/enrich.py` | Prompt construction, strict JSON parsing, prose-only application, ambiguity list. |
-| `specforge/contract_tests.py` | Test plan from spec (happy/401/404/422), sample payloads from schemas, pytest source emission. |
+| `specforge/contract_tests.py` | Test plan from spec (happy/401/404/422), sample payloads and response bodies from schemas, pytest source emission with correlation headers. |
+| `specforge/stub.py` | Loopback `ThreadingHTTPServer`: `operationId` -> case -> declared status/body, so generated tests run without external network. |
 | `specforge/cli.py` | `forge` / `verify`, report assembly, exit codes, mode banner. |
 
 ## Decisions
@@ -66,15 +68,23 @@ exponential backoff. 4xx client errors are not retried. The transport seam keeps
 tests fast and offline. Alternative rejected: `requests` — convenient but unnecessary for
 one POST endpoint, and harder to inject deterministically.
 
-**Fixtures are explicit.** Without `NEBIUS_API_KEY`, or with `--offline`, completions come
-from `specforge/fixtures/nebius_fixture.json`. Output and the JSON report both mark
-`mode: offline`; the banner says no network call was made. The fixture is synthetic and
-labelled as such — it is not presented as model output.
+**Fixtures are derived from the brief.** Without `NEBIUS_API_KEY`, or with `--offline`,
+`fixtures.py` builds the completion from the operations and requirements already in the
+prompt. Every operation of every brief gets prose, and the number of entries equals the
+number of declared operations; nothing is hardcoded for `shop.yaml`. Output and the JSON
+report both mark `mode: offline`; the banner says no network call was made. The payload is
+synthetic and labelled as such — it is not presented as model output.
 
 **Generated tests import nothing exotic.** They use `urllib.request`, read
 `SPECFORGE_BASE_URL`/`SPECFORGE_TOKEN`, and skip with a reason when no base URL is set.
 Assertions stay shallow (status, required keys, JSON types) because deeper business
 assertions cannot be derived from a contract alone.
+
+**A local stub proves the tests are runnable.** `stub.py` maps `operationId` plus case
+name to the status and body declared by the spec. Generated requests send
+`X-SpecForge-Operation` and `X-SpecForge-Case`; the stub runs in a daemon thread on
+`127.0.0.1:0`. The project test suite and `scripts/run_contract_stub.py` execute every
+generated test against it, so status assertions are exercised, not skipped.
 
 **Failure modes are explicit.** Invalid briefs exit `2` with every problem listed; invalid
 contracts exit `1` after writing artefacts so they can be inspected; live mode without a
@@ -87,9 +97,12 @@ with a warning in the report, never to a silent success.
 - Enrichment output is parsed as JSON and applied to a whitelist of prose keys only.
 - External `$ref` targets are rejected, so validation never fetches remote documents.
 - Generated test payloads contain no secrets; the optional token is read from env at run
-  time.
+  time. The stub binds loopback only and never leaves the host.
+- `scripts/live_smoke.py` redacts the bearer token before writing its request record; it
+  refuses to run without a key and writes nothing in that case.
 
 ## Runtime and versions
 
 Python 3.12, PyYAML 6.0.2, pytest 9.0.3. No other runtime dependencies. Files are plain
-YAML/JSON/Python; no database, server or container is required.
+YAML/JSON/Python; no database, production server or container is required. The only HTTP
+server is the loopback contract-test stub.

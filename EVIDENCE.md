@@ -4,9 +4,9 @@
 **Host:** local-aigon (Linux)
 **Interpreter:** Python 3.12.3 at `/usr/bin/python3`
 **Libraries:** PyYAML 6.0.2, pytest 9.0.3
-**Network:** none. `NEBIUS_API_KEY` was unset/empty for every command below, and offline
-mode was requested explicitly. No external API was called and no key is present in the
-repository.
+**Network:** no external network. `NEBIUS_API_KEY` was unset/empty for every command
+below. Contract tests were executed against a loopback `http.server` stub on 127.0.0.1.
+No external API was called and no key is present in the repository.
 
 All commands were run from the project root:
 
@@ -25,11 +25,11 @@ NEBIUS_API_KEY= /usr/bin/python3 -m pytest tests -q
 Output:
 
 ```
-............................................                             [100%]
-46 passed in 0.76s
+..................................................                       [100%]
+51 passed in 2.38s
 ```
 
-Coverage of the required negative cases:
+Coverage of the required negative and positive cases:
 
 | Requirement | Test |
 |---|---|
@@ -41,8 +41,12 @@ Coverage of the required negative cases:
 | retries and exhaustion are real | `tests/test_nebius.py::test_retries_on_500_and_429_then_succeeds`, `::test_retry_budget_exhaustion_is_reported` |
 | transport timeouts are retried, then reported | `tests/test_nebius.py::test_transport_timeouts_are_retried`, `::test_transport_timeout_exhaustion_is_reported` |
 | enrichment cannot change semantics | `tests/test_nebius.py::test_enrichment_cannot_change_contract_semantics` |
+| default model is NVIDIA Nemotron; `NEBIUS_MODEL` overrides it | `tests/test_nebius.py::test_default_model_is_nemotron_and_env_overrides` |
+| offline fixture is derived from the brief | `tests/test_nebius.py::test_offline_fixture_is_derived_from_the_shop_brief` |
+| a second, different brief is covered | `tests/test_nebius.py::test_offline_fixture_covers_a_different_brief` |
+| generated contract tests run against a local stub | `tests/test_contract_tests.py::test_generated_contract_tests_execute_against_local_stub` |
 
-## 2. Generate the contract (offline)
+## 2. Generate the contract (offline, brief 1: shop)
 
 Command:
 
@@ -56,21 +60,47 @@ Output:
 ```
 SpecForge 1.0.0
 brief: briefs/shop.yaml
-mode: OFFLINE — deterministic fixtures, no network call (model label: fixture:meta-llama/Meta-Llama-3.1-8B-Instruct)
+mode: OFFLINE — deterministic fixtures, no network call (model label: fixture:nvidia/Llama-3.1-Nemotron-70B-Instruct)
 spec: out/openapi.yaml — paths=6 operations=15 schemas=13
 validation: 0 errors, 0 warnings
 coverage: 11/11 requirements (100.0%)
 contract tests: out/contract_tests/test_contract_shop.py (45 tests)
-ambiguities: 3 (see out/forge_report.json)
+ambiguities: 4 (see out/forge_report.json)
 report: out/forge_report.json
 ```
 
-## 3. Verify the contract
+## 3. Generate the contract (offline, brief 2: library)
+
+Different resources, operations, auth scheme and requirement ids. The fixture is not
+tied to `shop.yaml`: the number of enriched operations follows this brief.
 
 Command:
 
 ```bash
+NEBIUS_API_KEY= /usr/bin/python3 -m specforge forge --brief briefs/library.yaml --out out/library/ --offline
+```
+
+Output:
+
+```
+SpecForge 1.0.0
+brief: briefs/library.yaml
+mode: OFFLINE — deterministic fixtures, no network call (model label: fixture:nvidia/Llama-3.1-Nemotron-70B-Instruct)
+spec: out/library/openapi.yaml — paths=4 operations=7 schemas=9
+validation: 0 errors, 0 warnings
+coverage: 7/7 requirements (100.0%)
+contract tests: out/library/contract_tests/test_contract_library.py (20 tests)
+ambiguities: 4 (see out/library/forge_report.json)
+report: out/library/forge_report.json
+```
+
+## 4. Verify both contracts
+
+Commands:
+
+```bash
 /usr/bin/python3 -m specforge verify out/openapi.yaml --brief briefs/shop.yaml
+/usr/bin/python3 -m specforge verify out/library/openapi.yaml --brief briefs/library.yaml
 ```
 
 Output:
@@ -79,26 +109,76 @@ Output:
 verify out/openapi.yaml (openapi 3.1.0) — paths=6 operations=15 schemas=13
 coverage: 11/11 requirements (100.0%)
 OK: 0 errors, 0 warnings
+verify out/library/openapi.yaml (openapi 3.1.0) — paths=4 operations=7 schemas=9
+coverage: 7/7 requirements (100.0%)
+OK: 0 errors, 0 warnings
 ```
 
-## 4. Generated contract tests are runnable
+## 5. Generated contract tests execute against the local stub
 
-Command:
+`specforge/stub.py` starts `http.server.ThreadingHTTPServer` in a daemon thread on
+127.0.0.1 and maps `operationId` -> case -> the status/body declared by the spec.
+Every generated request carries `X-SpecForge-Operation` and `X-SpecForge-Case`, so
+happy/401/404/422 cases are distinguishable. No external network is used.
+
+Shop brief:
 
 ```bash
-NEBIUS_API_KEY= /usr/bin/python3 -m pytest -q out/contract_tests
+/usr/bin/python3 scripts/run_contract_stub.py --spec out/openapi.yaml --tests out/contract_tests
 ```
 
-Output:
+```
+.............................................                            [100%]
+45 passed in 0.83s
+stub: 15 operations, 45 cases, 45 HTTP requests served
+```
+
+Library brief:
+
+```bash
+/usr/bin/python3 scripts/run_contract_stub.py --spec out/library/openapi.yaml --tests out/library/contract_tests
+```
 
 ```
-45 skipped in 0.47s
+....................                                                     [100%]
+20 passed in 0.19s
+stub: 7 operations, 20 cases, 20 HTTP requests served
 ```
 
-The skip is explicit: `SPECFORGE_BASE_URL is not set`. No server was started, so no false
-green is claimed.
+The same execution is part of the project suite:
+`tests/test_contract_tests.py::test_generated_contract_tests_execute_against_local_stub`
+runs all 45 generated shop tests and asserts 45 served requests.
 
-## 5. Negative paths
+## 6. Live Nebius Token Factory was not run
+
+There was no `NEBIUS_API_KEY` in this environment, so no live inference is claimed.
+Both live entry points fail closed before making a request:
+
+```bash
+env -u NEBIUS_API_KEY /usr/bin/python3 -m specforge forge --brief briefs/shop.yaml --out out/ --live
+```
+
+```
+error: live mode requires NEBIUS_API_KEY; use --offline for fixture mode
+exit=2
+```
+
+```bash
+env -u NEBIUS_API_KEY /usr/bin/python3 scripts/live_smoke.py --out out/live_smoke.json
+```
+
+```
+error: NEBIUS_API_KEY is not set; live smoke test not run
+exit=2
+```
+
+`out/live_smoke.json` was not created. The smoke script is ready: with a key it sends the
+same enrichment prompt used by `forge --live` and records the redacted request, raw
+response, HTTP status and measured latency.
+
+Default live model: `nvidia/Llama-3.1-Nemotron-70B-Instruct`; `NEBIUS_MODEL` overrides it.
+
+## 7. Negative paths
 
 Brief without requirements:
 
@@ -108,17 +188,6 @@ Brief without requirements:
 
 ```
 error: briefs/invalid-missing-requirements.yaml: requirements: at least one requirement is required
-exit=2
-```
-
-Live mode without a key:
-
-```bash
-env -u NEBIUS_API_KEY /usr/bin/python3 -m specforge forge --brief briefs/shop.yaml --out out/ --live
-```
-
-```
-error: live mode requires NEBIUS_API_KEY; use --offline for fixture mode
 exit=2
 ```
 
@@ -132,51 +201,58 @@ Wrong OpenAPI version (spec copied and downgraded to 3.0.3):
 verify out/_negative/openapi-3.0.yaml (openapi 3.0.3) — paths=6 operations=15 schemas=13
 ERROR   SPEC-VERSION         #/openapi: expected OpenAPI 3.1.x, got '3.0.3'
 FAILED: 1 errors, 0 warnings
+exit=1
 ```
 
 (The temporary `out/_negative` directory was removed after the run.)
 
-## 6. Artefact hashes
+## 8. Artefact hashes
 
 ```bash
-sha256sum out/openapi.yaml briefs/shop.yaml
+sha256sum out/openapi.yaml out/library/openapi.yaml briefs/shop.yaml briefs/library.yaml
 ```
 
 ```
-4a4cea1dee6056fc58685b8b8f0e6c63af1ebb1137d339a3498ce975bb8976ec  out/openapi.yaml
+ef538cc4c9e9650c1cd73d5a826e6f6cf1dd2899fa5c18912e84a3126da53fe8  out/openapi.yaml
+024c4e7104d3d1c54fe17a0eb7af48514eaa1137c916be10faea38d3493da8d3  out/library/openapi.yaml
 0277fa2dc22b3da4e31105a667deb09f13f9afe24d9306ad5e012d855b28bd74  briefs/shop.yaml
+d52c3dbbe7953f6a29f9012dfbeae7c79cb5c5e3279a172a7895ddb1c10fb3e2  briefs/library.yaml
 ```
 
-## 7. What the generated contract contains
+## 9. What the generated contracts contain
 
-- Paths: `/products`, `/products/{id}`, `/orders`, `/orders/{id}`, `/customers`,
-  `/customers/{id}`.
-- Operations: 15 (5 per resource).
-- Schemas: 13 — `Error`, plus `Product`, `Order`, `Customer` and their `Input`, `Update`,
-  `List` variants.
-- Security: bearer auth globally; every operation declares 401.
-- Requirement annotations: `x-specforge-requirements` per operation; coverage verified
-  independently by `verify --brief`.
-- Enrichment: 15/15 operations received fixture prose; 3 ambiguities recorded in
-  `out/forge_report.json`; contract semantics unchanged (asserted by test).
+Shop brief: paths `/products`, `/products/{id}`, `/orders`, `/orders/{id}`,
+`/customers`, `/customers/{id}`; 15 operations; 13 schemas (`Error`, plus `Product`,
+`Order`, `Customer` and their `Input`, `Update`, `List` variants); bearer auth; every
+operation declares 401.
 
-## 8. Replay
+Library brief: paths `/books`, `/books/{id}`, `/authors`, `/authors/{id}`; 7 operations;
+9 schemas; API-key auth in `X-Library-Key`; every operation declares 401.
+
+In both cases: `x-specforge-requirements` per operation, independently verified by
+`verify --brief`; 15/15 (shop) and 7/7 (library) operations received offline prose;
+4 ambiguities each, all derived from the current brief.
+
+## 10. Replay
 
 ```bash
 cd /opt/PROD/products/monai/monai-hackathons/work/hakaton_devpost_nebius-x-nvidia-global-ai-hackathon/project
 NEBIUS_API_KEY= /usr/bin/python3 -m pytest tests -q
 rm -rf out
 NEBIUS_API_KEY= /usr/bin/python3 -m specforge forge --brief briefs/shop.yaml --out out/ --offline
+NEBIUS_API_KEY= /usr/bin/python3 -m specforge forge --brief briefs/library.yaml --out out/library/ --offline
 /usr/bin/python3 -m specforge verify out/openapi.yaml --brief briefs/shop.yaml
-NEBIUS_API_KEY= /usr/bin/python3 -m pytest -q out/contract_tests
-sha256sum out/openapi.yaml
+/usr/bin/python3 -m specforge verify out/library/openapi.yaml --brief briefs/library.yaml
+/usr/bin/python3 scripts/run_contract_stub.py --spec out/openapi.yaml --tests out/contract_tests
+/usr/bin/python3 scripts/run_contract_stub.py --spec out/library/openapi.yaml --tests out/library/contract_tests
+sha256sum out/openapi.yaml out/library/openapi.yaml
 ```
 
 All outputs above are reproducible from a clean `out/` directory; generation is
 deterministic, except that the report embeds no timestamps or random values.
 
-## 9. Cleanup
+## 11. Cleanup
 
-Test runs used pytest temporary directories, which pytest removes automatically. The only
-files written outside the project directory were those ephemeral pytest scratch files.
-`__pycache__` directories are interpreter bytecode caches and contain no project state.
+Test runs used pytest temporary directories, which pytest removes automatically. The stub
+uses an ephemeral loopback port and is shut down after each run. `__pycache__` directories
+are interpreter bytecode caches and contain no project state.

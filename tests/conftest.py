@@ -15,6 +15,11 @@ def shop_brief():
     return load_brief(ROOT / "briefs" / "shop.yaml")
 
 
+@pytest.fixture(scope="session")
+def library_brief():
+    return load_brief(ROOT / "briefs" / "library.yaml")
+
+
 def minimal_brief() -> dict:
     return {
         "name": "Tiny API",
