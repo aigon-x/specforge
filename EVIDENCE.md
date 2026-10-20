@@ -283,6 +283,21 @@ coverage progress bar with `role="progressbar"`, error and ambiguity lists, raw 
 YAML inside `<details>`, empty/loading/error states, `aria-live="polite"` status line,
 inline SVG favicon, responsive grid and `prefers-reduced-motion` support.
 
+Keyboard and assistive-technology path (added 2026-10-20): a skip link to `<main id="main">`,
+a focusable result heading (`#results-title`, `tabindex="-1"`), and focus moved to that
+heading when a forge completes. `#results` no longer carries `aria-live` — the status line
+announces the outcome once, and the focus move tells the user where the result is. Motion
+uses the 120/180/260 ms tokens (`--t-fast/--t-base/--t-slow`); the coverage bar animates on
+260 ms instead of an ad-hoc 420 ms. Footer text moved from `#5d6774` (3.51:1) to
+`var(--muted)` (6.73:1) to clear WCAG AA at 12 px.
+
+Measured in Chromium 155 at 1280×900 and 390×844: first Tab exposes the skip link
+(`top` −48 → 12 px) and Enter moves focus to `<main>`; after "Forge contract" with the `shop`
+brief, `document.activeElement.id == "results-title"` on both viewports; status reads
+"shop: 15 operations, 100% coverage, no errors."; `#results` has no `aria-live`; no horizontal
+overflow at 390 px; 0 console errors. Frames: `evidence/webui-keyboard-desktop.png`,
+`evidence/webui-keyboard-mobile.png`.
+
 Measured with the expanded suite:
 
 ```bash
@@ -293,8 +308,15 @@ NEBIUS_API_KEY= /usr/bin/python3 -m pytest -q -p no:warnings
 57 passed, 65 skipped in 3.49s
 ```
 
-The six new tests in `tests/test_web.py` cover the index page, the brief list (`shop`
+The seven tests in `tests/test_web.py` cover the index page, the brief list (`shop`
 present), health, a shop forge with `coverage.percent == 100.0` and no errors, a path
-traversal brief (`../shop`) returning 404, and an unknown brief returning 404. The 65
-skipped cases are the generated contract tests, which execute in dedicated stub runs
-(sections 5 and 9).
+traversal brief (`../shop`) returning 404, an unknown brief returning 404, and the keyboard
+path (skip link, main landmark, focusable result heading, no `aria-live` on `#results`).
+Generated contract tests execute in dedicated stub runs (sections 5 and 9).
+
+Re-run after the keyboard pass:
+
+```
+$ NEBIUS_API_KEY= /usr/bin/python3 -m pytest -q -p no:warnings
+58 passed in 3.59s
+```

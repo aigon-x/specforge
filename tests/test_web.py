@@ -49,3 +49,13 @@ def test_unknown_brief_is_not_found():
 def test_missing_brief_is_not_found():
     response = client.post("/api/forge", json={"brief": "does-not-exist"})
     assert response.status_code == 404
+
+
+def test_index_is_navigable_from_the_keyboard():
+    """Skip link, main landmark and a focusable result heading are the keyboard path."""
+    html = client.get("/").text
+    assert '<a class="skip" href="#main">' in html
+    assert '<main id="main" tabindex="-1">' in html
+    assert 'id="results-title" class="sr-only" tabindex="-1"' in html
+    assert 'aria-live="polite"' in html          # the status region still announces
+    assert 'id="results" aria-live' not in html  # results are announced by focus, not twice

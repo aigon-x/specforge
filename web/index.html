@@ -11,9 +11,19 @@
     --bg: #05070a; --panel: #12161c; --panel-2: #171c24; --line: #232b36;
     --text: #e9ecf0; --muted: #8b96a5; --accent: #4c82d9; --accent-soft: #4c82d933;
     --ok: #5de1a4; --err: #e0566a; --warn: #f0b429;
-    --radius: 12px; --motion: 180ms;
+    --radius: 12px; --t-fast: 120ms; --t-base: 180ms; --t-slow: 260ms;
   }
   * { box-sizing: border-box; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .skip {
+    position: absolute; left: 12px; top: -48px; z-index: 10; padding: 10px 16px;
+    background: var(--accent); color: #06101f; border-radius: 9px; font-weight: 600;
+    text-decoration: none; transition: top var(--t-fast);
+  }
+  .skip:focus { top: 12px; }
   html, body { margin: 0; }
   body {
     min-height: 100vh; background:
@@ -47,7 +57,8 @@
   }
   button {
     padding: 0 20px; cursor: pointer; font-weight: 600; border-color: transparent;
-    background: var(--accent); color: #06101f; transition: filter var(--motion), transform var(--motion);
+    background: var(--accent); color: #06101f;
+    transition: filter var(--t-fast), transform var(--t-fast);
     white-space: nowrap;
   }
   button:hover:not(:disabled) { filter: brightness(1.08); }
@@ -72,7 +83,7 @@
   .meter { display: grid; gap: 8px; }
   .meter .row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); }
   .track { height: 10px; border-radius: 99px; background: #0a0e14; overflow: hidden; border: 1px solid var(--line); }
-  .fill { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #3968b4, var(--accent)); transition: width 420ms ease; }
+  .fill { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #3968b4, var(--accent)); transition: width var(--t-slow) ease; }
   .block h2 { font-size: 14px; margin: 0 0 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
   ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   ul.plain li::marker { color: var(--accent); }
@@ -83,7 +94,7 @@
   details { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0; }
   summary { cursor: pointer; padding: 14px 18px; color: var(--muted); font-size: 13px; }
   details pre { margin: 0; padding: 0 18px 18px; overflow: auto; max-height: 420px; font-size: 12.5px; color: #c9d3e0; }
-  footer { margin-top: 34px; color: #5d6774; font-size: 12px; }
+  footer { margin-top: 34px; color: var(--muted); font-size: 12px; }
   [hidden] { display: none !important; }
   @media (max-width: 560px) {
     .shell { padding: 26px 14px 48px; }
@@ -97,6 +108,8 @@
 </head>
 <body>
 <div class="shell">
+  <a class="skip" href="#main">Skip to the forge</a>
+  <main id="main" tabindex="-1">
   <header class="top">
     <span class="mark" aria-hidden="true">&#9670;</span>
     <h1>SpecForge</h1>
@@ -118,7 +131,8 @@
     <p id="status" class="status" role="status" aria-live="polite" aria-atomic="true">Loading briefs&hellip;</p>
   </section>
 
-  <section id="results" aria-live="polite" aria-label="Forge result" hidden>
+  <section id="results" aria-labelledby="results-title" hidden>
+    <h2 id="results-title" class="sr-only" tabindex="-1">Forge result</h2>
     <div class="cards">
       <div class="card"><div class="num" id="stat-paths">&ndash;</div><div class="cap">Paths</div></div>
       <div class="card"><div class="num" id="stat-ops">&ndash;</div><div class="cap">Operations</div></div>
@@ -146,6 +160,7 @@
     </details>
   </section>
 
+  </main>
   <footer>Offline mode &middot; no API key is read &middot; artifacts land in
     <code>out/web/&lt;brief&gt;/</code></footer>
 </div>
@@ -162,7 +177,7 @@
     paths: $("stat-paths"), ops: $("stat-ops"), schemas: $("stat-schemas"),
     cov: $("stat-cov"), covLabel: $("cov-label"), covBar: $("cov-bar"),
     covFill: $("cov-fill"), errors: $("errors"), ambiguities: $("ambiguities"),
-    yaml: $("yaml"),
+    yaml: $("yaml"), title: $("results-title"),
   };
 
   function setStatus(text, kind = "") {
@@ -234,6 +249,9 @@
     renderFindings(els.ambiguities, data.ambiguities, "No ambiguities reported.");
     els.yaml.textContent = data.yaml || "# no spec generated";
     results.hidden = false;
+    // Move focus to the result heading: a keyboard or screen-reader user who pressed
+    // Enter would otherwise stay on the button and never hear that the result exists.
+    els.title.focus();
   }
 
   async function loadBriefs() {
